@@ -1,0 +1,22 @@
+#!/usr/bin/env ruby
+
+require 'amqp'
+require 'pp'
+
+Signal.trap('INT') { AMQP.stop { EM.stop } }
+Signal.trap('TERM') { AMQP.stop { EM.stop } }
+
+AMQP.start do
+  queue = MQ.queue('images') # TODO Connect to RabbitMQ
+
+  queue.pop do |msg|
+    EM.add_timer(1) { queue.pop } unless msg # Wait a tick ... it's empty ...
+
+    p msg
+
+    queue.pop
+
+    # TODO Add image processing and cloud files.
+  end
+end
+
