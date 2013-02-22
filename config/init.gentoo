@@ -1,0 +1,25 @@
+#!/sbin/runscript
+# Copyright 1999-2013 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License, v2 or
+# later
+# $Header: $
+
+config="${CONFIG:-/etc/savvy/terra-firma.conf}"
+pidfile="${PIDFILE:-/var/run/savvy/terra-firma.pid}"
+
+command_args=""
+command_args="${command_args} ${EXTRA_OPTS}"
+
+command="/usr/bin/tfd"
+
+depend() {
+  after net
+  after bootmisc
+}
+
+start() {
+  ebegin "Starting ${SVCNAME}"
+  start-stop-daemon -i -u ${USER:-savvy} -g ${GROUP:-savvy} -b -m -d / -p ${pidfile} ${command} -- ${command_args}
+  eend $? "Failed to start ${SVCNAME}"
+}
+
