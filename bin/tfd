@@ -1,21 +1,50 @@
 #!/usr/bin/env ruby
 
 require 'rubygems'
+require 'tempfile'
+
 require 'amqp'
+require 'mongo'
+require 'cloudfiles'
 
-MQ_HOST = "localhost"
-MQ_PORT = 5672
-MQ_USER = "guest"
-MQ_PASS = "guest"
+CONFIG_DIR = File.join(File.dirname(File.expand_path(__FILE__)), "..", "config")
 
-AMQP.start("amqp://#{MQ_USER}:#{MQ_PASS}@#{MQ_HOST}:#{MQ_PORT}") do |connection|
+MQ_CONF = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["default"]
+
+MONGO_CONF = YAML.load_file(File.join(CONFIG_DIR, "mongo.yml"))["default"]
+
+CF_CONF = YAML.load_file(File.join(CONFIG_DIR, "cf.yml"))["default"]
+
+AMQP.start(MQ_CONF["uri"]) do |connection|
   Signal.trap('INT') { connection.close { EventMachine.stop } }
   Signal.trap('TERM') { connection.close { EventMachine.stop } }
 
   channel = AMQP::Channel.new(connection)
 
   channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
-    puts "Received #{payload}"
+    db = Mongo::MongoClient.new(MONGO_CONF["host"], MONGO_CONF["port"]).db("meta")
+    image_meta = db.collection("images").find("_id" => payload)
+
+    cf = CloudFiles::Connection.new(:username => CF_CONF["username"], :api_key => CF_CONF["password"], :snet => true)
+
+    container = cf.container(image_meta.author)
+
+    image = container.object(image_meta.name)
+
+    # TODO Mime check?
+    
+    tmp_path = File.join(File::SEPARATOR, "tmp", "#{image_meta.author}-#{image_meta.name}")
+
+    image_file = File.new(tmp_path, "wb")
+    image_file.write(image.data)
+    image_file.close
+
+    image = Magick::Image.read(tmp_path).first
+    image.change_geometry!("800x600") do |cols, rows, img|
+      new_image = img.resize(cols, rows)
+      new_image.write("tmp_path-#{rows}x#{cols}")
+    end
+
   end
 end
 
