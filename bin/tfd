@@ -22,27 +22,36 @@ AMQP.start(MQ_CONF["uri"]) do |connection|
   channel = AMQP::Channel.new(connection)
 
   channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
-    db = Mongo::MongoClient.new(MONGO_CONF["host"], MONGO_CONF["port"]).db("meta")
-    image_meta = db.collection("images").find("_id" => payload)
+
+    mongo_db = Mongo::MongoClient.new(MONGO_CONF["host"], MONGO_CONF["port"]).db("meta")
+    image_meta = mongo_db.collection("images").find("_id" => payload)
 
     cf = CloudFiles::Connection.new(:username => CF_CONF["username"], :api_key => CF_CONF["password"], :snet => true)
 
     container = cf.container(image_meta.author)
 
-    image = container.object(image_meta.name)
+    image_object = container.object("#{image_meta.md5}-orig")
 
     # TODO Mime check?
     
-    tmp_path = File.join(File::SEPARATOR, "tmp", "#{image_meta.author}-#{image_meta.name}")
+    tmp_path = File.join(File::SEPARATOR, "tmp", "#{image_meta.author}-#{image_meta.md5}-orig")
 
     image_file = File.new(tmp_path, "wb")
-    image_file.write(image.data)
+    image_file.write(image_object.data)
     image_file.close
 
     image = Magick::Image.read(tmp_path).first
-    image.change_geometry!("800x600") do |cols, rows, img|
-      new_image = img.resize(cols, rows)
-      new_image.write("tmp_path-#{rows}x#{cols}")
+
+    images = {}
+
+    images["thumb"] = image.change_geometry("100x100") { |cols,rows,img| img.resize!(cols, rows) }
+    images["small"] = image.change_geometry("640x480") { |cols,rows,img| img.resize!(cols, rows) }
+    images["medium"] = image.change_geometry("800x600") { |cols,rows,img| img.resize!(cols, rows) }
+    images["large"] = image.change_geometry("1024x768") { |cols,rows,img| img.resize!(cols, rows) }
+
+    images.each do |key,value|
+      image_object = container.create_object("#{image_meta.md5}-#{key}", false)
+      image_object.write(value)
     end
 
   end
