@@ -1,3 +1,0 @@
-[submodule "vendor/ruby-cloudfiles"]
-	path = vendor/ruby-cloudfiles
-	url = git://github.com/rackspace/ruby-cloudfiles.git
