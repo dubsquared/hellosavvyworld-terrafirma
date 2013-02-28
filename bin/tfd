@@ -2,10 +2,10 @@
 
 require 'rubygems'
 require 'yaml'
-
 require 'tempfile'
+
 require 'amqp'
-require 'mongo'
+require 'mongoid'
 require 'cloudfiles'
 
 CONFIG_DIR = File.join(File.dirname(File.expand_path(__FILE__)), "..", "config")
@@ -14,15 +14,29 @@ unless Dir.exist?(CONFIG_DIR)
   raise(Errno::ENOENT, "No such directory - #{CONFIG_DIR}")
 end
 
-MQ_CONF = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["default"]
+CF = YAML.load_file(File.join(CONFIG_DIR, "cloudfiles.yml"))["development"]
+MQ = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["development"]
 
-MONGO_CONF = YAML.load_file(File.join(CONFIG_DIR, "mongo.yml"))["default"]
+Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml", :development))
 
-CF_CONF = YAML.load_file(File.join(CONFIG_DIR, "cf.yml"))["default"]
+class Image
+  include Mongoid::Document
+
+  field :md5, :type => String
+  field :author, :type => String
+  
+  field :orig_url, :type => String
+  field :thumb_url, :type => String
+  field :small_url, :type => String
+  field :medium_url, :type => String
+  field :large_url, :type => String
+
+  field :created_at, :type => Date
+end
 
 # More input sanitization for configs? - Wuest
 
-AMQP.start(MQ_CONF["uri"]) do |connection|
+AMQP.start(MQ["uri"]) do |connection|
   Signal.trap('INT') { connection.close { EventMachine.stop } }
   Signal.trap('TERM') { connection.close { EventMachine.stop } }
 
@@ -30,19 +44,16 @@ AMQP.start(MQ_CONF["uri"]) do |connection|
 
   channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
 
-    mongo_db = Mongo::MongoClient.new(MONGO_CONF["host"], MONGO_CONF["port"]).db("meta")
-    image_meta = mongo_db.collection("images").find("_id" => payload)
+    image = Image.where(:md5 => payload)
 
-    cf = CloudFiles::Connection.new(:username => CF_CONF["username"], :api_key => CF_CONF["password"], :snet => true)
-
-    container = cf.container(image_meta.author)
-
-    image_object = container.object("#{image_meta.md5}-orig")
+    cloudfiles = CloudFiles::Connection.new(:username => CF["username"], :api_key => CF["password"])
+    container = cloudfiles.container(image.author)
+    object = container.object("#{payload}-orig")
 
     # TODO Mime check?
     
     image_file = Tempfile.new("wb")
-    image_file.write(image_object.data)
+    image_file.write(object.data)
 
     begin
       image = Magick::Image.read(image_file.path)
@@ -61,8 +72,8 @@ AMQP.start(MQ_CONF["uri"]) do |connection|
         images["large"] = image.change_geometry("1024x768") { |cols,rows,img| img.resize!(cols, rows) }
 
         images.each do |key,value|
-          image_object = container.create_object("#{image_meta.md5}-#{key}", false)
-          image_object.write(value)
+          object = container.create_object("#{payload}-#{key}", false)
+          object.write(value)
         end
       end
     rescue
