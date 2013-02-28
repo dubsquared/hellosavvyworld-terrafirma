@@ -1,18 +1,26 @@
 #!/usr/bin/env ruby
 
 require 'rubygems'
+require 'yaml'
 
+require 'tempfile'
 require 'amqp'
 require 'mongo'
 require 'cloudfiles'
 
 CONFIG_DIR = File.join(File.dirname(File.expand_path(__FILE__)), "..", "config")
 
+unless Dir.exist?(CONFIG_DIR)
+  raise(Errno::ENOENT, "No such directory - #{CONFIG_DIR}")
+end
+
 MQ_CONF = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["default"]
 
 MONGO_CONF = YAML.load_file(File.join(CONFIG_DIR, "mongo.yml"))["default"]
 
 CF_CONF = YAML.load_file(File.join(CONFIG_DIR, "cf.yml"))["default"]
+
+# More input sanitization for configs? - Wuest
 
 AMQP.start(MQ_CONF["uri"]) do |connection|
   Signal.trap('INT') { connection.close { EventMachine.stop } }
@@ -33,26 +41,35 @@ AMQP.start(MQ_CONF["uri"]) do |connection|
 
     # TODO Mime check?
     
-    tmp_path = File.join(File::SEPARATOR, "tmp", "#{image_meta.author}-#{image_meta.md5}-orig")
-
-    image_file = File.new(tmp_path, "wb")
+    image_file = Tempfile.new("wb")
     image_file.write(image_object.data)
-    image_file.close
 
-    image = Magick::Image.read(tmp_path).first
+    begin
+      image = Magick::Image.read(image_file.path)
 
-    images = {}
+      if image.empty?
+        # Add error handling here in case Magick doesn't blow up
+      else
+        # This is bad--multi layer formats will 
+        image = image.first
 
-    images["thumb"] = image.change_geometry("100x100") { |cols,rows,img| img.resize!(cols, rows) }
-    images["small"] = image.change_geometry("640x480") { |cols,rows,img| img.resize!(cols, rows) }
-    images["medium"] = image.change_geometry("800x600") { |cols,rows,img| img.resize!(cols, rows) }
-    images["large"] = image.change_geometry("1024x768") { |cols,rows,img| img.resize!(cols, rows) }
+        images = {}
 
-    images.each do |key,value|
-      image_object = container.create_object("#{image_meta.md5}-#{key}", false)
-      image_object.write(value)
+        images["thumb"] = image.change_geometry("100x100") { |cols,rows,img| img.resize!(cols, rows) }
+        images["small"] = image.change_geometry("640x480") { |cols,rows,img| img.resize!(cols, rows) }
+        images["medium"] = image.change_geometry("800x600") { |cols,rows,img| img.resize!(cols, rows) }
+        images["large"] = image.change_geometry("1024x768") { |cols,rows,img| img.resize!(cols, rows) }
+
+        images.each do |key,value|
+          image_object = container.create_object("#{image_meta.md5}-#{key}", false)
+          image_object.write(value)
+        end
+      end
+    rescue
+      # Recover from problems from reading the image, image resize, etc
+    ensure
+      image_file.close
     end
-
   end
 end
 
