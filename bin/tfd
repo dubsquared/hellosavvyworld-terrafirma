@@ -17,7 +17,7 @@ end
 CF = YAML.load_file(File.join(CONFIG_DIR, "cloudfiles.yml"))["development"]
 MQ = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["development"]
 
-Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml", :development))
+Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml"), :development)
 
 class Image
   include Mongoid::Document
