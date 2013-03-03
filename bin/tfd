@@ -48,36 +48,54 @@ AMQP.start(MQ["uri"]) do |connection|
 
   channel = AMQP::Channel.new(connection)
 
+  puts "Channel open, captain."
+
   channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
 
+    puts "Recieved payload ... processing ..."
+
     image = Image.where(:md5 => payload).first
+
+    puts "Look a picture, #{image.md5}!  Made by #{image.author}"
 
     cloudfiles = CloudFiles::Connection.new(:username => CF["username"], :api_key => CF["password"])
     container = cloudfiles.container(image.author)
     object = container.object("#{payload}")
 
+    puts "Found it!  The object is ready!"
+
     begin
       image = Magick::Image.read(object)
 
       if image.empty?
+        puts "Oh Noes!  The Magick didn't work!"
+
         # Add error handling here in case Magick doesn't blow up
       else
         # This is bad--multi layer formats will 
         image = image.first
 
         [ :thumb, :small, :medium, :large ].each do |type|
+          puts "Push out the #{type} thing."
+
           container.create_object("#{payload}-#{type}", false)
           object.write(image.change_geometry(
             case type 
-            when :thumb "100x100" 
-            when :small "640x480"
-            when :medium "800x600"
-            when :large "1024x768"
-            end) { |cols,rows,img| img.resize!(cols, rows) }
+            when :thumb then "100x100" 
+            when :small then "640x480"
+            when :medium then "800x600"
+            when :large then "1024x768"
+            end) do |cols,rows,img|
+              img.resize!(cols, rows)
+            end
+
+            puts "Pushed the #{type} thing."
+
         end
 
       end
-    rescue
+    rescue 
+      puts "Don't Panic; everything went wrong!"
       # Recover from problems from reading the image, image resize, etc
     end
   end
