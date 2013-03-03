@@ -87,7 +87,7 @@ AMQP.start(MQ_URI) do |connection|
 
           object = container.create_object("#{payload}-#{type}", false)
 
-          puts "Find me at: #{object.cdn_url}"
+          puts "Find me at: #{object.public_url}"
 
           resized_image = image.change_geometry(
             case type 
