@@ -85,7 +85,9 @@ AMQP.start(MQ_URI) do |connection|
         [ :thumb, :small, :medium, :large ].each do |type|
           puts "Push out the #{type} thing."
 
-          container.create_object("#{payload}-#{type}", false)
+          object = container.create_object("#{payload}-#{type}", false)
+
+          puts "Find me at: #{object.cdn_url}"
 
           resized_image = image.change_geometry(
             case type 
