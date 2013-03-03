@@ -2,7 +2,6 @@
 
 require 'rubygems'
 require 'yaml'
-require 'tempfile'
 
 require 'amqp'
 require 'mongoid'
@@ -23,15 +22,22 @@ class Image
   include Mongoid::Document
 
   field :md5, :type => String
+  index({ :md5 => 1 }, { :unique => true, :name => "md5_index" })
+
   field :author, :type => String
   
-  field :orig_url, :type => String
-  field :thumb_url, :type => String
-  field :small_url, :type => String
-  field :medium_url, :type => String
-  field :large_url, :type => String
+  field :cdn_url, :type => String
 
-  field :created_at, :type => Date
+  def url(type = :orig)
+    case type
+    when :orig
+      cdn_url
+    when :thumb, :small, :medium, :large
+      cdn_url + "-" + type.to_s
+    else
+      raise ArgumentError.new("Unknown URL type, #{type}")
+    end
+  end
 end
 
 # More input sanitization for configs? - Wuest
@@ -44,19 +50,14 @@ AMQP.start(MQ["uri"]) do |connection|
 
   channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
 
-    image = Image.where(:md5 => payload)
+    image = Image.where(:md5 => payload).first
 
     cloudfiles = CloudFiles::Connection.new(:username => CF["username"], :api_key => CF["password"])
     container = cloudfiles.container(image.author)
-    object = container.object("#{payload}-orig")
-
-    # TODO Mime check?
-    
-    image_file = Tempfile.new("wb")
-    image_file.write(object.data)
+    object = container.object("#{payload}")
 
     begin
-      image = Magick::Image.read(image_file.path)
+      image = Magick::Image.read(object)
 
       if image.empty?
         # Add error handling here in case Magick doesn't blow up
@@ -64,22 +65,20 @@ AMQP.start(MQ["uri"]) do |connection|
         # This is bad--multi layer formats will 
         image = image.first
 
-        images = {}
-
-        images["thumb"] = image.change_geometry("100x100") { |cols,rows,img| img.resize!(cols, rows) }
-        images["small"] = image.change_geometry("640x480") { |cols,rows,img| img.resize!(cols, rows) }
-        images["medium"] = image.change_geometry("800x600") { |cols,rows,img| img.resize!(cols, rows) }
-        images["large"] = image.change_geometry("1024x768") { |cols,rows,img| img.resize!(cols, rows) }
-
-        images.each do |key,value|
-          object = container.create_object("#{payload}-#{key}", false)
-          object.write(value)
+        [ :thumb, :small, :medium, :large ].each do |type|
+          container.create_object("#{payload}-#{type}", false)
+          object.write(image.change_geometry(
+            case type 
+            when :thumb "100x100" 
+            when :small "640x480"
+            when :medium "800x600"
+            when :large "1024x768"
+            end) { |cols,rows,img| img.resize!(cols, rows) }
         end
+
       end
     rescue
       # Recover from problems from reading the image, image resize, etc
-    ensure
-      image_file.close
     end
   end
 end
