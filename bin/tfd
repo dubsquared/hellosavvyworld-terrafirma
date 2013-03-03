@@ -69,6 +69,8 @@ AMQP.start(MQ_URI) do |connection|
     container = cloudfiles.container(image.author)
     object = container.object("#{payload}")
 
+    content_type = object.content_type
+
     puts "Found it!  The object is ready!"
 
     begin
@@ -104,7 +106,7 @@ AMQP.start(MQ_URI) do |connection|
 
           puts "Wrote image to Tempfile."
           
-          object.write(tmp_image)
+          object.write(tmp_image, { "Content-Type" => content_type })
 
           puts "Pushed the #{type} thing."
         end
