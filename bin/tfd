@@ -85,12 +85,9 @@ AMQP.start(MQ["uri"]) do |connection|
             when :small then "640x480"
             when :medium then "800x600"
             when :large then "1024x768"
-            end) do |cols,rows,img|
-              img.resize!(cols, rows)
-            end
+            end) { |cols,rows,img| img.resize!(cols, rows) })
 
-            puts "Pushed the #{type} thing."
-
+          puts "Pushed the #{type} thing."
         end
 
       end
