@@ -3,7 +3,7 @@
 require 'rubygems'
 require 'yaml'
 
-require 'rmagick'
+require 'RMagick'
 
 require 'amqp'
 require 'mongoid'
