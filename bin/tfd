@@ -19,8 +19,6 @@ end
 CF = YAML.load_file(File.join(CONFIG_DIR, "cloudfiles.yml"))["development"]
 MQ_URI = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["development"]["uri"]
 
-Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml"), :development)
-
 class Image
   include Mongoid::Document
 
@@ -60,6 +58,8 @@ AMQP.start(MQ_URI) do |connection|
   queue.subscribe do |payload|
 
     puts "Recieved payload ... processing ..."
+
+    Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml"), :development)
 
     image = Image.where(:md5 => payload).first
 
