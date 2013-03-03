@@ -97,7 +97,7 @@ AMQP.start(MQ_URI) do |connection|
       end
     rescue 
       puts "Don't Panic!"
-      puts "#{$!.class}: #{!$.message}"
+      puts "#{$!.class}: #{$!.message}"
     end
   end
 end
