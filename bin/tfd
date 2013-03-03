@@ -14,7 +14,7 @@ unless Dir.exist?(CONFIG_DIR)
 end
 
 CF = YAML.load_file(File.join(CONFIG_DIR, "cloudfiles.yml"))["development"]
-MQ = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["development"]
+URI = YAML.load_file(File.join(CONFIG_DIR, "mq.yml"))["development"]["uri"]
 
 Mongoid.load!(File.join(CONFIG_DIR, "mongoid.yml"), :development)
 
@@ -42,7 +42,7 @@ end
 
 # More input sanitization for configs? - Wuest
 
-AMQP.start(MQ["uri"]) do |connection|
+AMQP.start(URI) do |connection|
   Signal.trap('INT') { connection.close { EventMachine.stop { exit } } }
   Signal.trap('TERM') { connection.close { EventMachine.stop { exit } } }
 
