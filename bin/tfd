@@ -43,14 +43,18 @@ end
 # More input sanitization for configs? - Wuest
 
 AMQP.start(MQ["uri"]) do |connection|
-  Signal.trap('INT') { connection.close { EventMachine.stop } }
-  Signal.trap('TERM') { connection.close { EventMachine.stop } }
+  Signal.trap('INT') { connection.close { EventMachine.stop { exit } } }
+  Signal.trap('TERM') { connection.close { EventMachine.stop { exit } } }
 
   channel = AMQP::Channel.new(connection)
+  exchange = channel.fanout("images")
+  queue = channe.queue("", :exclusive => true)
+
+  queue.bind(exchange)
 
   puts "Channel open, captain."
 
-  channel.queue("savvy.images", :auto_delete => true).subscribe do |payload|
+  queue.subscribe do |payload|
 
     puts "Recieved payload ... processing ..."
 
