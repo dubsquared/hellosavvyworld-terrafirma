@@ -107,6 +107,8 @@ AMQP.start(MQ_URI) do |connection|
           puts "Pushed the #{type} thing."
         end
 
+        puts "All done with #{image.md5}"
+
       end
     rescue 
       puts "Don't Panic!"
