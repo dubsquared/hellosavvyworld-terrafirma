@@ -3,6 +3,8 @@
 require 'rubygems'
 require 'yaml'
 
+require 'rmagick'
+
 require 'amqp'
 require 'mongoid'
 require 'cloudfiles'
