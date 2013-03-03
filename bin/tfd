@@ -2,6 +2,7 @@
 
 require 'rubygems'
 require 'yaml'
+require 'tempfile'
 
 require 'RMagick'
 
@@ -85,13 +86,23 @@ AMQP.start(MQ_URI) do |connection|
           puts "Push out the #{type} thing."
 
           container.create_object("#{payload}-#{type}", false)
-          object.write(image.change_geometry(
+
+          resized_image = image.change_geometry(
             case type 
             when :thumb then "100x100" 
             when :small then "640x480"
             when :medium then "800x600"
             when :large then "1024x768"
             end) { |cols,rows,img| img.resize!(cols, rows) })
+
+          puts "Resized the image."
+
+          tmp_image = Tempfile.new("image")
+          resized_image.write(tmp_image.path)
+
+          puts "Wrote image to Tempfile."
+          
+          object.write(tmp_image)
 
           puts "Pushed the #{type} thing."
         end
