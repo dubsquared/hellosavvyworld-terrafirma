@@ -96,8 +96,8 @@ AMQP.start(MQ_URI) do |connection|
 
       end
     rescue 
-      puts "Don't Panic; everything went wrong!"
-      # Recover from problems from reading the image, image resize, etc
+      puts "Don't Panic!"
+      puts "#{$!.class}: #{!$.message}"
     end
   end
 end
