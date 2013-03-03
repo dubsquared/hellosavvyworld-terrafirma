@@ -69,7 +69,7 @@ AMQP.start(MQ_URI) do |connection|
     puts "Found it!  The object is ready!"
 
     begin
-      image = Magick::Image.read(object)
+      image = Magick::Image.from_blob(object.read)
 
       if image.empty?
         puts "Oh Noes!  The Magick didn't work!"
